@@ -1,0 +1,29 @@
+
+name: Periodic Bot Advertisement
+
+on:
+  schedule:
+    # هر ۱۰ ساعت
+    - cron: "0 */10 * * *"
+  workflow_dispatch:
+
+jobs:
+  send-ad:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Wake Render and trigger advertisement
+        env:
+          RENDER_URL: ${{ secrets.RENDER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$RENDER_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Missing RENDER_URL or CRON_SECRET"
+            exit 1
+          fi
+
+          curl --fail --show-error \
+            --max-time 300 \
+            -X POST \
+            "${RENDER_URL%/}/cron/advertisement" \
+            -H "Authorization: Bearer $CRON_SECRET"
