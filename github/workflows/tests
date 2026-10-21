@@ -1,0 +1,85 @@
+
+import importlib.util
+import sys
+import types
+import unittest
+from pathlib import Path
+
+# برای تست اعتبارسنجی لینک، نیازی به نصب yt-dlp نیست.
+if "yt_dlp" not in sys.modules:
+    fake = types.ModuleType("yt_dlp")
+    fake.utils = types.SimpleNamespace(DownloadError=Exception)
+    fake.YoutubeDL = object
+    sys.modules["yt_dlp"] = fake
+
+BOT_PATH = Path(__file__).resolve().parents[1] / "bot.py"
+
+spec = importlib.util.spec_from_file_location(
+    "bale_bot_under_test",
+    BOT_PATH
+)
+
+bot = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bot)
+
+
+class URLPolicyTests(unittest.TestCase):
+
+    def test_supported_platforms(self):
+        cases = {
+            "https://www.youtube.com/watch?v=abc": "youtube",
+            "https://youtu.be/abc": "youtube",
+            "https://www.instagram.com/reel/abc/": "instagram",
+            "https://www.tiktok.com/@user/video/123": "tiktok",
+            "https://www.pinterest.com/pin/123/": "pinterest",
+            "https://pin.it/abc": "pinterest",
+        }
+
+        for url, platform in cases.items():
+            with self.subTest(url=url):
+                self.assertEqual(
+                    bot.platform_for_url(url),
+                    platform
+                )
+                self.assertTrue(bot.validate_url(url)[0])
+
+    def test_rejects_general_sites_and_direct_files(self):
+        urls = (
+            "https://example.com/video.mp4",
+            "https://vimeo.com/123",
+            "https://example.org",
+        )
+
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertFalse(bot.validate_url(url)[0])
+
+    def test_rejects_malformed_or_unsafe_urls(self):
+        urls = (
+            "",
+            "ftp://youtube.com/video",
+            "https://user:pass@youtube.com/x",
+            "https://youtube.com:8080/x",
+            "https://youtube.com:bad/x",
+        )
+
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertFalse(bot.validate_url(url)[0])
+
+    def test_domain_suffix_spoof_is_rejected(self):
+        self.assertFalse(
+            bot.validate_url(
+                "https://youtube.com.evil.example/video"
+            )[0]
+        )
+
+        self.assertFalse(
+            bot.validate_url(
+                "https://notinstagram.com/reel/1"
+            )[0]
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
